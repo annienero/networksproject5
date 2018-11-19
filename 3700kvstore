@@ -2,41 +2,124 @@
 
 import sys, socket, select, time, json, random
 
+# node types
+FOLLOWER = 'follower'
+CANDIDATE = 'candidate'
+LEADER = 'leader'
+
+# RCP types
+REQUEST_VOTE = 'requestVote'
+VOTE = 'vote'
+NO_VOTE = 'noVote'
+APPEND_ENTRY = 'appendEntry'
+ACCEPT_APPEND_ENTRY = 'acceptAppendEntry'
+REJECT_APPEND_ENTRY = 'rejectAppendEntry'
+
+myNodeType = FOLLOWER
+electionTimeout = random.randint(150,300) / 1000
+currentTerm = 0
+votedFor = None
+myVotes = 1
+LEADER_UNKNOWN = 'FFFF'
+leader = LEADER_UNKNOWN
+
 # Your ID number
 my_id = sys.argv[1]
 
 # The ID numbers of all the other replicas
 replica_ids = sys.argv[2:]
 
+# number of nodes needed for majority
+majority = int((len(replica_ids) + 1) / 2) + 1
+
 # Connect to the network. All messages to/from other replicas and clients will
 # occur over this socket
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
 sock.connect(my_id)
 
-last = 0
+messageCount = 0
+def generateMID():
+	global messageCount
+	messageCount += 1
+	return int(str(my_id) + str(messageCount))
 
+def sendMessage(msg):
+	sock.send(json.dumps(msg))
+	print '%s sending %s message to %s' % (msg['src'], msg['type'], msg['dst'])
+
+def handleRequestVote(msg):
+	if currentTerm  <=  msg['term'] and (not votedFor or votedFor == msg['candidateId']): # also check candidate's log is at least as up-to-date as ours (also do we need to update our term???)
+		# vote for them!
+		votedFor = msg['candidateId']
+		response = {'src': my_id, 'dst': msg['dst'], 'leader': LEADER_UNKNOWN, 'type': VOTE, 'term': msg['term'], 'candidateId': my_id, 'MID': msg['MID']}
+		sendMessage(response)
+	else:
+		# reply false
+		response = {'src': my_id, 'dst': msg['dst'], 'leader': LEADER_UNKNOWN, 'type': NO_VOTE, 'term': msg['term'], 'candidateId': my_id, 'MID': msg['MID']}
+		sendMessage(msg)
+
+def handleAppendEntry(msg):
+	if msg['term'] < currentTerm: 
+		response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
+		sendMessage(msg)
+	# also check prevlogidx and conflicting log entries
+	else:
+		# append any new entries to log and update commitidx
+		leader = msg['leader']
+		myNodeType = FOLLOWER
+		currentTerm = msg['term']
+
+def becomeLeader():
+	global myNodeType, electionTimeout, votedFor, myVotes
+	print "BECOMING LEADER", my_id
+	myNodeType = LEADER
+	electionTimeout = random.randint(150,300) / 1000
+	votedFor = None
+	myVotes = 1
+	sendHeartbeat()
+
+def sendHeartbeat():
+	for id in replica_ids:
+		msg = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'term': currentTerm, 'MID': generateMID()}
+		sendMessage(msg)
+
+last = 0
 while True:
+	if myNodeType == FOLLOWER:
+		clock = time.time()
+		if clock - last > electionTimeout:
+			leader = LEADER_UNKNOWN
+			electionTimeout = random.randint(150,300) / 1000
+			currentTerm += 1
+			myNodeType = CANDIDATE
+			votedFor = my_id
+			# issue RequestVote RPCs in parallel to each of the other servers in the cluster
+			for id in replica_ids:
+				msg = {'src': my_id, 'dst': id, 'leader': LEADER_UNKNOWN, 'type': REQUEST_VOTE, 'term': currentTerm, 'candidateId': my_id, 'MID': generateMID()}
+				sendMessage(msg)
+
 	ready = select.select([sock], [], [], 0.1)[0]
 	
 	if sock in ready:
 		msg_raw = sock.recv(32768)
 		
 		if len(msg_raw) == 0: continue
+		last = clock
 		msg = json.loads(msg_raw)
-		
+		if msg['term'] > currentTerm:
+			currentTerm = msg['term']
 		# For now, ignore get() and put() from clients
 		if msg['type'] in ['get', 'put']:
-                        pass
-		
-		# Handle noop messages. This may be removed from your final implementation
-		elif msg['type'] == 'noop':
-			print '%s received a NOOP from %s' % (msg['dst'], msg['src'])
-		
-	clock = time.time()
-	if clock-last > 2:
-		# Send a no-op message to a random peer every two seconds, just for fun
-		# You definitely want to remove this from your implementation
-		msg = {'src': my_id, 'dst': random.choice(replica_ids), 'leader': 'FFFF', 'type': 'noop'}
-		sock.send(json.dumps(msg))
-		print '%s sending a NOOP to %s' % (msg['src'], msg['dst'])
-		last = clock
+			pass
+		elif msg['type'] == REQUEST_VOTE:
+			handleRequestVote(msg)
+		elif msg['type'] == VOTE:
+			if msg['term'] == currentTerm:
+				myVotes += 1
+				if myVotes >= majority:
+					becomeLeader()
+		elif msg['type'] == APPEND_ENTRY:
+			handleAppendEntry(msg)
+
+			
+			
