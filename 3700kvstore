@@ -118,6 +118,7 @@ def sendHeartbeat():
 
 def handlePut(msg):
 	if myNodeType == LEADER:
+		print my_id, "putting", msg['value'], "at", msg['key']
 		database[msg['key']] = msg['value'] 
 		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok', 'MID': generateMID()}
 		sendMessage(response)
@@ -130,6 +131,7 @@ def handlePut(msg):
 def handleGet(msg):
 	if myNodeType == LEADER:
 		value = database[msg['key']]
+		print my_id, "getting", msg['key'], "value is", value
 		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok','MID': generateMID(), 'value': value}
 		sendMessage(response)
 	elif myNodeType == FOLLOWER:
