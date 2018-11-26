@@ -46,7 +46,7 @@ messageCount = 0
 def generateMID():
 	global messageCount
 	messageCount += 1
-	return int(str(my_id) + str(messageCount))
+	return str(my_id) + str(messageCount)
 
 def sendMessage(msg):
 	global sock
