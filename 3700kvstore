@@ -30,6 +30,8 @@ my_id = sys.argv[1]
 # The ID numbers of all the other replicas
 replica_ids = sys.argv[2:]
 
+voteRequestWhitelist = replica_ids[:]
+
 # number of nodes needed for majority
 majority = int((len(replica_ids) + 1) / 2) + 1
 
@@ -68,7 +70,7 @@ def handleRequestVote(msg):
 		sendMessage(msg)
 
 def handleAppendEntry(msg):
-	global leader, myNodeType, currentTerm, votedFor
+	global leader, myNodeType, currentTerm, voteRequestWhitelist
 	if msg['term'] < currentTerm: 
 		response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
 		sendMessage(msg)
@@ -81,21 +83,31 @@ def handleAppendEntry(msg):
 		votedFor = None
 		print my_id, "RECOGNIZING", leader, "AS LEADER"
 		print my_id, "updated term to", currentTerm
+		voteRequestWhitelist = replica_ids[:]
+
 def handleVote(msg):
 	global myVotes
 	if msg['term'] == currentTerm:
+		voteRequestWhitelist.remove(msg['src'])
 		myVotes += 1
 		if myVotes >= majority:
 			becomeLeader()
 
+def handleNoVote(msg):
+	global voteRequestWhitelist
+	if msg['term'] == currentTerm:
+		voteRequestWhitelist.remove(msg['src'])
+		
+
 def becomeLeader():
-	global myNodeType, electionTimeout, votedFor, myVotes
+	global myNodeType, electionTimeout, votedFor, myVotes, voteRequestWhitelist
 	print "BECOMING LEADER", my_id
 	myNodeType = LEADER
 	electionTimeout = random.randint(150,300) / 1000
 	votedFor = None
 	myVotes = 1
 	sendHeartbeat()
+	voteRequestWhitelist = replica_ids[:]
 
 def sendHeartbeat():
 	for id in replica_ids:
@@ -121,6 +133,8 @@ while True:
 			if not myNodeType == LEADER: handleVote(msg)
 		elif msg['type'] == APPEND_ENTRY:
 			handleAppendEntry(msg)
+		elif msg['type'] == NO_VOTE:
+			handleNoVote(msg)
 
 	if not myNodeType == LEADER:
 		clock = time.time()
