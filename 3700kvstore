@@ -37,6 +37,8 @@ majority = int((len(replica_ids) + 1) / 2) + 1
 
 database = {}
 
+lastHeartbeat = time.time()
+
 # Connect to the network. All messages to/from other replicas and clients will
 # occur over this socket
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
@@ -112,9 +114,11 @@ def becomeLeader():
 	voteRequestWhitelist = replica_ids[:]
 
 def sendHeartbeat():
+	global lastHeartbeat
 	for id in replica_ids:
 		msg = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'term': currentTerm, 'MID': generateMID()}
 		sendMessage(msg)
+		lastHeartbeat = time.time()
 
 def handlePut(msg):
 	if myNodeType == LEADER:
@@ -169,7 +173,10 @@ while True:
 		elif msg['type'] == NO_VOTE:
 			handleNoVote(msg)
 
-	if not myNodeType == LEADER:
+	if myNodeType == LEADER:
+		if time.time() - lastHeartbeat > .25:
+			sendHeartbeat()
+	else:
 		clock = time.time()
 		if clock - last > electionTimeout:
                         print my_id, "timed out after"
