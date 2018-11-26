@@ -16,7 +16,8 @@ ACCEPT_APPEND_ENTRY = 'acceptAppendEntry'
 REJECT_APPEND_ENTRY = 'rejectAppendEntry'
 
 myNodeType = FOLLOWER
-electionTimeout = random.randint(150,300) / 1000
+electionTimeout = float(random.randint(150,300)) / 1000
+print(electionTimeout)
 currentTerm = 0
 votedFor = None
 myVotes = 1
@@ -62,7 +63,7 @@ def handleRequestVote(msg):
 		sendMessage(response)
 	else:
 		# reply false
-		response = {'src': my_id, 'dst': msg['dst'], 'leader': LEADER_UNKNOWN, 'type': NO_VOTE, 'term': msg['term'], 'candidateId': my_id, 'MID': msg['MID']}
+		response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': NO_VOTE, 'term': msg['term'], 'candidateId': msg['candidateId'], 'MID': msg['MID']}
 		sendMessage(msg)
 
 def handleAppendEntry(msg):
@@ -114,15 +115,16 @@ while True:
 		elif msg['type'] == REQUEST_VOTE:
 			handleRequestVote(msg)
 		elif msg['type'] == VOTE:
-			handleVote(msg)
+			if not myNodeType == LEADER: handleVote(msg)
 		elif msg['type'] == APPEND_ENTRY:
 			handleAppendEntry(msg)
 
 	if myNodeType == FOLLOWER:
 		clock = time.time()
 		if clock - last > electionTimeout:
-			leader = LEADER_UNKNOWN
-			electionTimeout = random.randint(150,300) / 1000
+                        print "i timed out after", electionTimeout
+       	                leader = LEADER_UNKNOWN
+			electionTimeout = float(random.randint(150,300)) / 1000
 			currentTerm += 1
 			myNodeType = CANDIDATE
 			votedFor = my_id
