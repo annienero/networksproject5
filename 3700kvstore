@@ -48,12 +48,13 @@ def sendMessage(msg):
 	if sock.send(json.dumps(msg)) == 0:
 		print "unable to send, trying again"
 		sock.close()
-		socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+		sock = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
 		sock.connect(my_id)
 		sendMessage(msg)
 	print '%s sending %s message to %s' % (msg['src'], msg['type'], msg['dst'])
 
 def handleRequestVote(msg):
+	global votedFor
 	if currentTerm  <=  msg['term'] and (not votedFor or votedFor == msg['candidateId']): # also check candidate's log is at least as up-to-date as ours (also do we need to update our term???)
 		# vote for them!
 		votedFor = msg['candidateId']
@@ -65,6 +66,7 @@ def handleRequestVote(msg):
 		sendMessage(msg)
 
 def handleAppendEntry(msg):
+	global leader, myNodeType, currentTerm
 	if msg['term'] < currentTerm: 
 		response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
 		sendMessage(msg)
