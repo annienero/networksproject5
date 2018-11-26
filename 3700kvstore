@@ -16,7 +16,7 @@ ACCEPT_APPEND_ENTRY = 'acceptAppendEntry'
 REJECT_APPEND_ENTRY = 'rejectAppendEntry'
 
 myNodeType = FOLLOWER
-electionTimeout = float(random.randint(150,300)) / 1000
+electionTimeout = float(random.randint(500, 1000)) / 1000
 print(electionTimeout)
 currentTerm = 0
 votedFor = None
@@ -63,21 +63,24 @@ def handleRequestVote(msg):
 		sendMessage(response)
 	else:
 		# reply false
+		print my_id, "replied false to", msg['candidateId']
 		response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': NO_VOTE, 'term': msg['term'], 'candidateId': msg['candidateId'], 'MID': msg['MID']}
 		sendMessage(msg)
 
 def handleAppendEntry(msg):
-	global leader, myNodeType, currentTerm
+	global leader, myNodeType, currentTerm, votedFor
 	if msg['term'] < currentTerm: 
 		response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
 		sendMessage(msg)
 	# also check prevlogidx and conflicting log entries
 	else:
-		# append any new entries to log and update commitidx
+                # append any new entries to log and update commitidx
 		leader = msg['leader']
 		myNodeType = FOLLOWER
 		currentTerm = msg['term']
-
+		votedFor = None
+		print my_id, "RECOGNIZING", leader, "AS LEADER"
+		print my_id, "updated term to", currentTerm
 def handleVote(msg):
 	global myVotes
 	if msg['term'] == currentTerm:
@@ -119,12 +122,15 @@ while True:
 		elif msg['type'] == APPEND_ENTRY:
 			handleAppendEntry(msg)
 
-	if myNodeType == FOLLOWER:
+	if not myNodeType == LEADER:
 		clock = time.time()
 		if clock - last > electionTimeout:
-                        print "i timed out after", electionTimeout
+                        print my_id, "timed out after"
+			print electionTimeout
        	                leader = LEADER_UNKNOWN
-			electionTimeout = float(random.randint(150,300)) / 1000
+			electionTimeout = float(random.randint(500, 1000)) / 1000
+			print "NEW ELECTION TIMEOUT FOR", my_id
+			print electionTimeout
 			currentTerm += 1
 			myNodeType = CANDIDATE
 			votedFor = my_id
