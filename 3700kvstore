@@ -106,7 +106,7 @@ while True:
 		if len(msg_raw) == 0: continue
 		last = clock
 		msg = json.loads(msg_raw)
-		if msg['term'] > currentTerm:
+		if 'term' in msg and msg['term'] > currentTerm:
 			currentTerm = msg['term']
 		# For now, ignore get() and put() from clients
 		if msg['type'] in ['get', 'put']:
