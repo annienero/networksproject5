@@ -88,10 +88,11 @@ def handleAppendEntry(msg):
 		print my_id, "RECOGNIZING", leader, "AS LEADER"
 		print my_id, "updated term to", currentTerm
 		voteRequestWhitelist = replica_ids[:]
-		for entry in msg['entries']:
-			if entry[0] in database:
-				break
-			database[entry[0]] = entry[1]
+		if 'entries' in msg:
+			for entry in msg['entries']:
+				if entry[0] in database:
+					break
+				database[entry[0]] = entry[1]
 
 def handleVote(msg):
 	global myVotes
@@ -152,11 +153,11 @@ def handleGet(msg):
 	elif myNodeType == FOLLOWER:
 		redirect(msg)
 	else:
-		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'fail', msg['MID']}
+		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'fail', 'MID': msg['MID']}
 		sendMessage(response)
 
 def redirect(msg):
-	response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'redirect', msg['MID']}
+	response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'redirect', 'MID': msg['MID']}
 	sendMessage(response)
 
 
