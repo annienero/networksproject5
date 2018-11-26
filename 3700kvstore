@@ -58,7 +58,7 @@ def handleRequestVote(msg):
 	if currentTerm  <=  msg['term'] and (not votedFor or votedFor == msg['candidateId']): # also check candidate's log is at least as up-to-date as ours (also do we need to update our term???)
 		# vote for them!
 		votedFor = msg['candidateId']
-		response = {'src': my_id, 'dst': msg['dst'], 'leader': LEADER_UNKNOWN, 'type': VOTE, 'term': msg['term'], 'candidateId': my_id, 'MID': msg['MID']}
+		response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': VOTE, 'term': msg['term'], 'candidateId': votedFor, 'MID': msg['MID']}
 		sendMessage(response)
 	else:
 		# reply false
