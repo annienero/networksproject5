@@ -65,12 +65,12 @@ def handleRequestVote(msg):
 		sendMessage(response)
 	else:
 		# reply false
-		print my_id, "replied false to", msg['candidateId']
+		print my_id, "replied false to", msg['candidateId'], "voted for", votedFor
 		response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': NO_VOTE, 'term': msg['term'], 'candidateId': msg['candidateId'], 'MID': msg['MID']}
 		sendMessage(msg)
 
 def handleAppendEntry(msg):
-	global leader, myNodeType, currentTerm, voteRequestWhitelist
+	global leader, myNodeType, currentTerm, voteRequestWhitelist, votedFor
 	if msg['term'] < currentTerm: 
 		response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
 		sendMessage(msg)
