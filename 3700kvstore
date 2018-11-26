@@ -88,6 +88,10 @@ def handleAppendEntry(msg):
 		print my_id, "RECOGNIZING", leader, "AS LEADER"
 		print my_id, "updated term to", currentTerm
 		voteRequestWhitelist = replica_ids[:]
+		for entry in msg['entries']:
+			if entry[0] in database:
+				break
+			database[entry[0]] = entry[1]
 
 def handleVote(msg):
 	global myVotes
@@ -124,28 +128,35 @@ def handlePut(msg):
 	if myNodeType == LEADER:
 		print my_id, "putting", msg['value'], "at", msg['key']
 		database[msg['key']] = msg['value'] 
-		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok', 'MID': generateMID()}
+		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok', 'MID': msg['MID']}
 		sendMessage(response)
+		updateFollowers(msg['key'], msg['value'])
 	elif myNodeType == FOLLOWER:
 		redirect(msg)
 	else:
-		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'fail', 'MID': generateMID()}
+		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'fail', 'MID': msg['MID']}
+		sendMessage(response)
+
+def updateFollowers(key, value):
+	for id in replica_ids:
+		entries = [(key, value)]
+		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'term': currentTerm}
 		sendMessage(response)
 
 def handleGet(msg):
 	if myNodeType == LEADER:
 		value = database[msg['key']]
 		print my_id, "getting", msg['key'], "value is", value
-		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok','MID': generateMID(), 'value': value}
+		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok','MID': msg['MID'], 'value': value}
 		sendMessage(response)
 	elif myNodeType == FOLLOWER:
 		redirect(msg)
 	else:
-		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'fail', 'MID': generateMID()}
+		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'fail', msg['MID']}
 		sendMessage(response)
 
 def redirect(msg):
-	response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'redirect', 'MID': generateMID()}
+	response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'redirect', msg['MID']}
 	sendMessage(response)
 
 
