@@ -93,26 +93,13 @@ def sendHeartbeat():
 
 last = 0
 while True:
-	if myNodeType == FOLLOWER:
-		clock = time.time()
-		if clock - last > electionTimeout:
-			leader = LEADER_UNKNOWN
-			electionTimeout = random.randint(150,300) / 1000
-			currentTerm += 1
-			myNodeType = CANDIDATE
-			votedFor = my_id
-			# issue RequestVote RPCs in parallel to each of the other servers in the cluster
-			for id in replica_ids:
-				msg = {'src': my_id, 'dst': id, 'leader': LEADER_UNKNOWN, 'type': REQUEST_VOTE, 'term': currentTerm, 'candidateId': my_id, 'MID': generateMID()}
-				sendMessage(msg)
-
 	ready = select.select([sock], [], [], 0.1)[0]
 	
 	if sock in ready:
 		msg_raw = sock.recv(32768)
 		
 		if len(msg_raw) == 0: continue
-		last = clock
+		last = time.time()
 		msg = json.loads(msg_raw)
 		if 'term' in msg and msg['term'] > currentTerm:
 			currentTerm = msg['term']
@@ -128,6 +115,19 @@ while True:
 					becomeLeader()
 		elif msg['type'] == APPEND_ENTRY:
 			handleAppendEntry(msg)
+
+	if myNodeType == FOLLOWER:
+		clock = time.time()
+		if clock - last > electionTimeout:
+			leader = LEADER_UNKNOWN
+			electionTimeout = random.randint(150,300) / 1000
+			currentTerm += 1
+			myNodeType = CANDIDATE
+			votedFor = my_id
+			# issue RequestVote RPCs in parallel to each of the other servers in the cluster
+			for id in replica_ids:
+				msg = {'src': my_id, 'dst': id, 'leader': LEADER_UNKNOWN, 'type': REQUEST_VOTE, 'term': currentTerm, 'candidateId': my_id, 'MID': generateMID()}
+				sendMessage(msg)
 
 			
 			
