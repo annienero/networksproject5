@@ -30,12 +30,18 @@ my_id = sys.argv[1]
 # The ID numbers of all the other replicas
 replica_ids = sys.argv[2:]
 
+nextIdx = []
+matchIdx = []
+
 voteRequestWhitelist = replica_ids[:]
 
 # number of nodes needed for majority
 majority = int((len(replica_ids) + 1) / 2) + 1
 
 database = {}
+log = []
+commitIdx = 0
+lastApplied = 0
 
 lastHeartbeat = time.time()
 
@@ -52,12 +58,7 @@ def generateMID():
 
 def sendMessage(msg):
 	global sock
-	if sock.send(json.dumps(msg)) == 0:
-		print "unable to send, trying again"
-		sock.close()
-		sock = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
-		sock.connect(my_id)
-		sendMessage(msg)
+	sock.send(json.dumps(msg))
 	print '%s sending %s message to %s' % (msg['src'], msg['type'], msg['dst'])
 
 def handleRequestVote(msg):
@@ -90,9 +91,9 @@ def handleAppendEntry(msg):
 		voteRequestWhitelist = replica_ids[:]
 		if 'entries' in msg:
 			for entry in msg['entries']:
-				if entry[0] in database:
+				if entry[1][0] in database:
 					break
-				database[entry[0]] = entry[1]
+				log.append(entry)
 
 def handleVote(msg):
 	global myVotes
@@ -109,7 +110,7 @@ def handleNoVote(msg):
 		
 
 def becomeLeader():
-	global myNodeType, electionTimeout, votedFor, myVotes, voteRequestWhitelist
+	global myNodeType, electionTimeout, votedFor, myVotes, voteRequestWhitelist, nextIdx, matchIdx
 	print "BECOMING LEADER", my_id
 	myNodeType = LEADER
 	electionTimeout = random.randint(150,300) / 1000
@@ -117,6 +118,8 @@ def becomeLeader():
 	myVotes = 1
 	sendHeartbeat()
 	voteRequestWhitelist = replica_ids[:]
+	nextIdx = map(replica_ids, lambda id: return commitIdx + 1)
+	matchIdx = map(replica_ids, lambda id: return 0)
 
 def sendHeartbeat():
 	global lastHeartbeat
@@ -127,27 +130,26 @@ def sendHeartbeat():
 
 def handlePut(msg):
 	if myNodeType == LEADER:
-		print my_id, "putting", msg['value'], "at", msg['key']
-		database[msg['key']] = msg['value'] 
-		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok', 'MID': msg['MID']}
-		sendMessage(response)
-		updateFollowers(msg['key'], msg['value'])
+		log.append((currentTerm, (msg['key'], msg['value'])))
+		notifyFollowersOfPut(msg['key'], msg['value'])
+		#database[msg['key']] = msg['value'] 
+		#response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok', 'MID': msg['MID']}
+		#sendMessage(response)
 	elif myNodeType == FOLLOWER:
 		redirect(msg)
 	else:
 		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'fail', 'MID': msg['MID']}
 		sendMessage(response)
 
-def updateFollowers(key, value):
+def notifyFollowersOfPut(key, value):
 	for id in replica_ids:
-		entries = [(key, value)]
+		entries = [(currentTerm, (key, value))]
 		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'term': currentTerm}
 		sendMessage(response)
 
 def handleGet(msg):
 	if myNodeType == LEADER:
 		value = database[msg['key']]
-		print my_id, "getting", msg['key'], "value is", value
 		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok','MID': msg['MID'], 'value': value}
 		sendMessage(response)
 	elif myNodeType == FOLLOWER:
@@ -160,6 +162,11 @@ def redirect(msg):
 	response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'redirect', 'MID': msg['MID']}
 	sendMessage(response)
 
+def commitIfNecessary():
+	if commitIdx > lastApplied:
+		lastApplied += 1
+		entry = log[lastApplied]
+		database[entry[1][0]] = entry[1][1]
 
 last = 0
 while True:
@@ -171,7 +178,7 @@ while True:
 		msg = json.loads(msg_raw)
 		if 'term' in msg and msg['term'] > currentTerm:
 			currentTerm = msg['term']
-		# For now, ignore get() and put() from clients
+			myNodeType = FOLLOWER
 		if msg['type'] == 'get':
 			handleGet(msg)
 		elif msg['type'] == 'put':
@@ -191,12 +198,8 @@ while True:
 	else:
 		clock = time.time()
 		if clock - last > electionTimeout:
-                        print my_id, "timed out after"
-			print electionTimeout
-       	                leader = LEADER_UNKNOWN
+			leader = LEADER_UNKNOWN
 			electionTimeout = float(random.randint(500, 1000)) / 1000
-			print "NEW ELECTION TIMEOUT FOR", my_id
-			print electionTimeout
 			currentTerm += 1
 			myNodeType = CANDIDATE
 			votedFor = my_id
@@ -204,6 +207,9 @@ while True:
 			for id in replica_ids:
 				msg = {'src': my_id, 'dst': id, 'leader': LEADER_UNKNOWN, 'type': REQUEST_VOTE, 'term': currentTerm, 'candidateId': my_id, 'MID': generateMID()}
 				sendMessage(msg)
+
+	commitIfNecessary()
+
 
 			
 			
