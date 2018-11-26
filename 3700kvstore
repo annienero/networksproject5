@@ -35,6 +35,8 @@ voteRequestWhitelist = replica_ids[:]
 # number of nodes needed for majority
 majority = int((len(replica_ids) + 1) / 2) + 1
 
+database = {}
+
 # Connect to the network. All messages to/from other replicas and clients will
 # occur over this socket
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
@@ -114,6 +116,33 @@ def sendHeartbeat():
 		msg = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'term': currentTerm, 'MID': generateMID()}
 		sendMessage(msg)
 
+def handlePut(msg):
+	if myNodeType == LEADER:
+		database[msg['key']] = msg['value'] 
+		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok', 'MID': generateMID()}
+		sendMessage(response)
+	elif myNodeType == FOLLOWER:
+		redirect(msg)
+	else:
+		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'fail', 'MID': generateMID()}
+		sendMessage(response)
+
+def handleGet(msg):
+	if myNodeType == LEADER:
+		value = database[msg['key']]
+		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok','MID': generateMID(), 'value': value}
+		sendMessage(response)
+	elif myNodeType == FOLLOWER:
+		redirect(msg)
+	else:
+		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'fail', 'MID': generateMID()}
+		sendMessage(response)
+
+def redirect(msg):
+	response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'redirect', 'MID': generateMID()}
+	sendMessage(response)
+
+
 last = 0
 while True:
 	ready = select.select([sock], [], [], 0.1)[0]	
@@ -125,8 +154,10 @@ while True:
 		if 'term' in msg and msg['term'] > currentTerm:
 			currentTerm = msg['term']
 		# For now, ignore get() and put() from clients
-		if msg['type'] in ['get', 'put']:
-			pass
+		if msg['type'] == 'get':
+			handleGet(msg)
+		elif msg['type'] == 'put':
+			handlePut(msg)
 		elif msg['type'] == REQUEST_VOTE:
 			handleRequestVote(msg)
 		elif msg['type'] == VOTE:
