@@ -44,7 +44,13 @@ def generateMID():
 	return int(str(my_id) + str(messageCount))
 
 def sendMessage(msg):
-	sock.send(json.dumps(msg))
+	global sock
+	if sock.send(json.dumps(msg)) == 0:
+		print "unable to send, trying again"
+		sock.close()
+		socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+		sock.connect(my_id)
+		sendMessage(msg)
 	print '%s sending %s message to %s' % (msg['src'], msg['type'], msg['dst'])
 
 def handleRequestVote(msg):
