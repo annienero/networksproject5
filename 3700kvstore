@@ -70,13 +70,13 @@ def handleRequestVote(msg):
 	else:
 		# reply false
 		response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': NO_VOTE, 'term': msg['term'], 'candidateId': msg['candidateId'], 'MID': msg['MID']}
-		sendMessage(msg)
+		sendMessage(response)
 
 def handleAppendEntry(msg):
 	global commitIdx, log
 	if msg['term'] < currentTerm: 
 		response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
-		sendMessage(msg)
+		sendMessage(response)
 	# TODO also check prevlogidx
 	else:
 		resetFollower(msg)
@@ -86,7 +86,7 @@ def handleAppendEntry(msg):
 			entries = msg['entries']
 			if msg['logLen'] - len(entries) > len(log):
 				response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
-				sendMessage(msg)
+				sendMessage(response)
 			for i in range(len(entries)):
 				entry = entries[i]
 				entryIdx = msg['logLen'] - len(entries) + i 
@@ -94,7 +94,7 @@ def handleAppendEntry(msg):
 					if entry[0] != log[entryIdx][0]:
 						log = log[:entryIdx]
 						response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
-						sendMessage(msg)
+						sendMessage(response)
 						return
 					else:
 						continue
@@ -104,7 +104,7 @@ def handleAppendEntry(msg):
 
 def replyAppendEntrySuccess(msg):
 	response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': ACCEPT_APPEND_ENTRY, 'MID': msg['MID'], 'commitIdx': commitIdx, 'logLen': len(log)}
-	sendMessage(msg)
+	sendMessage(response)
 
 def handleAcceptAppendEntry(msg):
 	id = msg['src']
