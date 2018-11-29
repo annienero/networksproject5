@@ -17,7 +17,6 @@ REJECT_APPEND_ENTRY = 'rejectAppendEntry'
 
 myNodeType = FOLLOWER
 electionTimeout = float(random.randint(500, 1000)) / 1000
-print(electionTimeout)
 currentTerm = 0
 votedFor = None
 myVotes = 1
@@ -59,7 +58,7 @@ def generateMID():
 def sendMessage(msg):
 	global sock
 	sock.send(json.dumps(msg))
-	print '%s sending %s message to %s' % (msg['src'], msg['type'], msg['dst'])
+#	print '%s sending %s message to %s' % (msg['src'], msg['type'], msg['dst'])
 
 def handleRequestVote(msg):
 	global votedFor
@@ -70,7 +69,6 @@ def handleRequestVote(msg):
 		sendMessage(response)
 	else:
 		# reply false
-		print my_id, "replied false to", msg['candidateId'], "voted for", votedFor
 		response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': NO_VOTE, 'term': msg['term'], 'candidateId': msg['candidateId'], 'MID': msg['MID']}
 		sendMessage(msg)
 
@@ -138,8 +136,8 @@ def resetFollower(msg):
 	currentTerm = msg['term']
 	votedFor = None
 	myVotes = 1
-	print my_id, "RECOGNIZING", leader, "AS LEADER"
-	print my_id, "updated term to", currentTerm
+	#print my_id, "RECOGNIZING", leader, "AS LEADER"
+	#print my_id, "updated term to", currentTerm
 	voteRequestWhitelist = replica_ids[:]
 	
 def handleVote(msg):
