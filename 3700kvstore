@@ -58,7 +58,6 @@ def generateMID():
 def sendMessage(msg):
 	sock.send(json.dumps(msg))
 	print '%s sending %s message to %s' % (msg['src'], msg['type'], msg['dst'])
-	print msg
 
 def handleRequestVote(msg):
 	global votedFor
@@ -214,6 +213,7 @@ def commitIfNecessary():
 		lastApplied += 1
 		entry = log[lastApplied]
 		database[entry[1][0]] = entry[1][1]
+		print my_id, "committed", entry[0]
 
 last = 0
 while True:
