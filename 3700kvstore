@@ -103,7 +103,7 @@ def handleAppendEntry(msg):
 		replyAppendEntrySuccess(msg)
 
 def replyAppendEntrySuccess(msg):
-	response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': ACCEPT_APPEND_ENTRY, 'MID': msg['MID'], 'commitIdx': commitIdx, 'logLen': len(log)}
+	response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': ACCEPT_APPEND_ENTRY, 'MID': msg['MID'], 'commitIdx': commitIdx, 'logLen': len(log)}
 	sendMessage(response)
 
 def handleAcceptAppendEntry(msg):
