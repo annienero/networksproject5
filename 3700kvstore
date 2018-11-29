@@ -56,9 +56,9 @@ def generateMID():
 	return str(my_id) + str(messageCount)
 
 def sendMessage(msg):
-	global sock
 	sock.send(json.dumps(msg))
-#	print '%s sending %s message to %s' % (msg['src'], msg['type'], msg['dst'])
+	print '%s sending %s message to %s' % (msg['src'], msg['type'], msg['dst'])
+	print msg
 
 def handleRequestVote(msg):
 	global votedFor
@@ -127,6 +127,7 @@ def handleRejectAppendEntry(msg):
 	nextIdx[id] = nextIdx[id] - 1
 	entries = log[nextIdx[id]:]
 	response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': len(log), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1}
+	print "handle reject"
 	sendMessage(response)
 
 def resetFollower(msg):
@@ -171,6 +172,7 @@ def sendHeartbeat():
 	global lastHeartbeat
 	for id in replica_ids:
 		msg = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'term': currentTerm, 'MID': generateMID(), 'commitIdx': commitIdx}
+		print "heartbeat"
 		sendMessage(msg)
 		lastHeartbeat = time.time()
 
@@ -188,6 +190,7 @@ def notifyFollowersOfPut():
 	for id in replica_ids:
 		entries = log[nextIdx[id]:]
 		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': len(log), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1}
+		print "put"
 		sendMessage(response)
 
 def handleGet(msg):
@@ -256,7 +259,3 @@ while True:
 				sendMessage(msg)
 
 	commitIfNecessary()
-
-
-			
-			
