@@ -206,6 +206,7 @@ def redirect(msg):
 	sendMessage(response)
 
 def commitIfNecessary():
+	global lastApplied
 	if commitIdx > lastApplied:
 		lastApplied += 1
 		entry = log[lastApplied]
