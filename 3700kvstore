@@ -39,6 +39,7 @@ majority = int((len(replica_ids) + 1) / 2) + 1
 
 database = {}
 log = []
+putInfo = []
 commitIdx = 0
 lastApplied = 0
 
@@ -177,7 +178,7 @@ def sendHeartbeat():
 
 def handlePut(msg):
 	if myNodeType == LEADER:
-		log.append((currentTerm, (msg['key'], msg['value'])))
+		log.append((currentTerm, (msg['key'], msg['value']), msg['src'], msg['MID']))
 		notifyFollowersOfPut()
 	elif myNodeType == FOLLOWER:
 		redirect(msg)
@@ -213,7 +214,9 @@ def commitIfNecessary():
 		lastApplied += 1
 		entry = log[lastApplied]
 		database[entry[1][0]] = entry[1][1]
-		print my_id, "committed", entry[0]
+		if myNodeType == LEADER:
+			response = {'src': my_id, 'dst': entry[2], 'leader': leader, 'type': 'ok', 'MID': entry[3]}
+			sendMessage(response)
 
 last = 0
 while True:
