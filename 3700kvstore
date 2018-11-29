@@ -30,8 +30,8 @@ my_id = sys.argv[1]
 # The ID numbers of all the other replicas
 replica_ids = sys.argv[2:]
 
-nextIdx = []
-matchIdx = []
+nextIdx = {}
+matchIdx = {}
 
 voteRequestWhitelist = replica_ids[:]
 
@@ -63,7 +63,7 @@ def sendMessage(msg):
 
 def handleRequestVote(msg):
 	global votedFor
-	if currentTerm  <=  msg['term'] and (not votedFor or votedFor == msg['candidateId']): # also check candidate's log is at least as up-to-date as ours (also do we need to update our term???)
+	if currentTerm  <=  msg['term'] and (not votedFor or votedFor == msg['candidateId']): # TODO also check candidate's log is at least as up-to-date as ours
 		# vote for them!
 		votedFor = msg['candidateId']
 		response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': VOTE, 'term': msg['term'], 'candidateId': votedFor, 'MID': msg['MID']}
@@ -75,26 +75,73 @@ def handleRequestVote(msg):
 		sendMessage(msg)
 
 def handleAppendEntry(msg):
-	global leader, myNodeType, currentTerm, voteRequestWhitelist, votedFor
+	global commitIdx, log
 	if msg['term'] < currentTerm: 
 		response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
 		sendMessage(msg)
-	# also check prevlogidx and conflicting log entries
+	# TODO also check prevlogidx
 	else:
-                # append any new entries to log and update commitidx
-		leader = msg['leader']
-		myNodeType = FOLLOWER
-		currentTerm = msg['term']
-		votedFor = None
-		print my_id, "RECOGNIZING", leader, "AS LEADER"
-		print my_id, "updated term to", currentTerm
-		voteRequestWhitelist = replica_ids[:]
+		resetFollower(msg)
+		if msg['commitIdx'] > commitIdx:
+			commitIdx = min(msg['commitIdx'], len(log) - 1)
 		if 'entries' in msg:
-			for entry in msg['entries']:
-				if entry[1][0] in database:
-					break
+			entries = msg['entries']
+			if msg['logLen'] - len(entries) > len(log):
+				response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
+				sendMessage(msg)
+			for i in range(len(entries)):
+				entry = entries[i]
+				entryIdx = msg['logLen'] - len(entries) + i 
+				if len(log) > entryIdx:
+					if entry[0] != log[entryIdx][0]:
+						log = log[:entryIdx]
+						response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
+						sendMessage(msg)
+						return
+					else:
+						continue
+				# append any new entries to log
 				log.append(entry)
+		replyAppendEntrySuccess(msg)
 
+def replyAppendEntrySuccess(msg):
+	response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': ACCEPT_APPEND_ENTRY, 'MID': msg['MID'], 'commitIdx': commitIdx, 'logLen': len(log)}
+	sendMessage(msg)
+
+def handleAcceptAppendEntry(msg):
+	id = msg['src']
+	nextIdx[id] = msg['logLen']
+	matchIdx[id] = msg['logLen'] - 1
+	updateCommitIndex(matchIdx[id])
+
+def updateCommitIndex(logIdx):
+	global commitIdx
+	count = 1
+	for id in replica_ids:
+		if matchIdx[id] >= logIdx:
+			count += 1
+	if count >= majority and logIdx > commitIdx:
+		commitIdx = logIdx
+
+
+def handleRejectAppendEntry(msg):
+	id = msg['src']
+	nextIdx[id] = nextIdx[id] - 1
+	entries = log[nextIdx[id]:]
+	response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': len(log), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1}
+	sendMessage(response)
+
+def resetFollower(msg):
+	global leader, myNodeType, currentTerm, voteRequestWhitelist, votedFor, myVotes
+	leader = msg['leader']
+	myNodeType = FOLLOWER
+	currentTerm = msg['term']
+	votedFor = None
+	myVotes = 1
+	print my_id, "RECOGNIZING", leader, "AS LEADER"
+	print my_id, "updated term to", currentTerm
+	voteRequestWhitelist = replica_ids[:]
+	
 def handleVote(msg):
 	global myVotes
 	if msg['term'] == currentTerm:
@@ -118,33 +165,31 @@ def becomeLeader():
 	myVotes = 1
 	sendHeartbeat()
 	voteRequestWhitelist = replica_ids[:]
-	nextIdx = map(replica_ids, lambda id: return commitIdx + 1)
-	matchIdx = map(replica_ids, lambda id: return 0)
+	for id in replica_ids:
+		nextIdx[id] = len(log)
+		matchIdx[id] = 0
 
 def sendHeartbeat():
 	global lastHeartbeat
 	for id in replica_ids:
-		msg = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'term': currentTerm, 'MID': generateMID()}
+		msg = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'term': currentTerm, 'MID': generateMID(), 'commitIdx': commitIdx}
 		sendMessage(msg)
 		lastHeartbeat = time.time()
 
 def handlePut(msg):
 	if myNodeType == LEADER:
 		log.append((currentTerm, (msg['key'], msg['value'])))
-		notifyFollowersOfPut(msg['key'], msg['value'])
-		#database[msg['key']] = msg['value'] 
-		#response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok', 'MID': msg['MID']}
-		#sendMessage(response)
+		notifyFollowersOfPut()
 	elif myNodeType == FOLLOWER:
 		redirect(msg)
 	else:
 		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'fail', 'MID': msg['MID']}
 		sendMessage(response)
 
-def notifyFollowersOfPut(key, value):
+def notifyFollowersOfPut():
 	for id in replica_ids:
-		entries = [(currentTerm, (key, value))]
-		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'term': currentTerm}
+		entries = log[nextIdx[id]:]
+		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': len(log), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1}
 		sendMessage(response)
 
 def handleGet(msg):
@@ -177,8 +222,7 @@ while True:
 		last = time.time()
 		msg = json.loads(msg_raw)
 		if 'term' in msg and msg['term'] > currentTerm:
-			currentTerm = msg['term']
-			myNodeType = FOLLOWER
+			resetFollower(msg)
 		if msg['type'] == 'get':
 			handleGet(msg)
 		elif msg['type'] == 'put':
@@ -191,6 +235,10 @@ while True:
 			handleAppendEntry(msg)
 		elif msg['type'] == NO_VOTE:
 			handleNoVote(msg)
+		elif msg['type'] == ACCEPT_APPEND_ENTRY:
+			handleAcceptAppendEntry(msg)
+		elif msg['type'] == REJECT_APPEND_ENTRY:
+			handleRejectAppendEntry(msg)
 
 	if myNodeType == LEADER:
 		if time.time() - lastHeartbeat > .25:
