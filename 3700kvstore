@@ -41,7 +41,7 @@ database = {}
 log = []
 putInfo = []
 commitIdx = 0
-lastApplied = 0
+lastApplied = -1
 
 lastHeartbeat = time.time()
 
@@ -58,7 +58,7 @@ def generateMID():
 
 def sendMessage(msg):
 	sock.send(json.dumps(msg))
-	print '%s sending %s message to %s' % (msg['src'], msg['type'], msg['dst'])
+	#print '%s sending %s message to %s' % (msg['src'], msg['type'], msg['dst'])
 
 def handleRequestVote(msg):
 	global votedFor
@@ -121,13 +121,11 @@ def updateCommitIndex(logIdx):
 	if count >= majority and logIdx > commitIdx:
 		commitIdx = logIdx
 
-
 def handleRejectAppendEntry(msg):
 	id = msg['src']
 	nextIdx[id] = nextIdx[id] - 1
 	entries = log[nextIdx[id]:]
 	response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': len(log), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1}
-	print "handle reject"
 	sendMessage(response)
 
 def resetFollower(msg):
@@ -172,7 +170,6 @@ def sendHeartbeat():
 	global lastHeartbeat
 	for id in replica_ids:
 		msg = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'term': currentTerm, 'MID': generateMID(), 'commitIdx': commitIdx}
-		print "heartbeat"
 		sendMessage(msg)
 		lastHeartbeat = time.time()
 
@@ -190,7 +187,6 @@ def notifyFollowersOfPut():
 	for id in replica_ids:
 		entries = log[nextIdx[id]:]
 		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': len(log), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1}
-		print "put"
 		sendMessage(response)
 
 def handleGet(msg):
@@ -210,13 +206,14 @@ def redirect(msg):
 
 def commitIfNecessary():
 	global lastApplied
-	if commitIdx > lastApplied:
-		lastApplied += 1
-		entry = log[lastApplied]
+	if commitIdx > lastApplied and len(log) > 0:
+		entry = log[lastApplied + 1]
 		database[entry[1][0]] = entry[1][1]
 		if myNodeType == LEADER:
+	#		print "sending ok for lastapplied", lastApplied
 			response = {'src': my_id, 'dst': entry[2], 'leader': leader, 'type': 'ok', 'MID': entry[3]}
 			sendMessage(response)
+		lastApplied += 1
 
 last = 0
 while True:
