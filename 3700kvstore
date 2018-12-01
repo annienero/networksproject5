@@ -61,9 +61,10 @@ def sendMessage(msg):
 	#print '%s sending %s message to %s' % (msg['src'], msg['type'], msg['dst'])
 
 def handleRequestVote(msg):
-	global votedFor
+	global leader, votedFor
 	if currentTerm  <=  msg['term'] and (not votedFor or votedFor == msg['candidateId']): # TODO also check candidate's log is at least as up-to-date as ours
 		# vote for them!
+		leader = LEADER_UNKNOWN
 		votedFor = msg['candidateId']
 		response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': VOTE, 'term': msg['term'], 'candidateId': votedFor, 'MID': msg['MID']}
 		sendMessage(response)
@@ -73,7 +74,7 @@ def handleRequestVote(msg):
 		sendMessage(response)
 
 def handleAppendEntry(msg):
-	global commitIdx, log
+	global commitIdx, log, lastApplied
 	if msg['term'] < currentTerm: 
 		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
 		sendMessage(response)
@@ -93,6 +94,7 @@ def handleAppendEntry(msg):
 				if len(log) > entryIdx:
 					if entry[0] != log[entryIdx][0]:
 						log = log[:entryIdx]
+						lastApplied = entryIdx - 1
 						response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
 						sendMessage(response)
 						return
@@ -123,13 +125,11 @@ def updateCommitIndex(logIdx):
 
 def handleRejectAppendEntry(msg):
 	id = msg['src']
-	print my_id, "got rejected :("
-	print "nextidx list is", nextIdx
-	print "looking for", id
-	nextIdx[id] = nextIdx[id] - 1
-	entries = log[nextIdx[id]:]
-	response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': len(log), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1}
-	sendMessage(response)
+	if nextIdx[id] > 0:
+		nextIdx[id] = nextIdx[id] - 1
+		entries = log[nextIdx[id]:min(len(log), nextIdx[id] + 10)]
+		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': min(len(log), nextIdx[id] + 10), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1}
+		sendMessage(response)
 
 def resetFollower(msg):
 	global leader, myNodeType, currentTerm, voteRequestWhitelist, votedFor, myVotes
@@ -145,23 +145,26 @@ def resetFollower(msg):
 def handleVote(msg):
 	global myVotes
 	if msg['term'] == currentTerm:
-		voteRequestWhitelist.remove(msg['src'])
-		myVotes += 1
-		if myVotes >= majority:
-			becomeLeader()
+		if msg['src'] in voteRequestWhitelist:
+			voteRequestWhitelist.remove(msg['src'])
+			myVotes += 1
+			if myVotes >= majority:
+				becomeLeader()
 
 def handleNoVote(msg):
 	global voteRequestWhitelist
 	if msg['term'] == currentTerm:
-		voteRequestWhitelist.remove(msg['src'])
+		if msg['src'] in voteRequestWhitelist:
+			voteRequestWhitelist.remove(msg['src'])
 		
 
 def becomeLeader():
-	global myNodeType, electionTimeout, votedFor, myVotes, voteRequestWhitelist, nextIdx, matchIdx
+	global leader, myNodeType, electionTimeout, votedFor, myVotes, voteRequestWhitelist, nextIdx, matchIdx
 	print "BECOMING LEADER", my_id
 	myNodeType = LEADER
 	electionTimeout = random.randint(150,300) / 1000
 	votedFor = None
+	leader = my_id
 	myVotes = 1
 	sendHeartbeat()
 	voteRequestWhitelist = replica_ids[:]
@@ -188,14 +191,19 @@ def handlePut(msg):
 
 def notifyFollowersOfPut():
 	for id in replica_ids:
-		entries = log[nextIdx[id]:]
-		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': len(log), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1}
+		entries = log[nextIdx[id]:min(len(log), nextIdx[id] + 10)]
+		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': min(len(log), nextIdx[id] + 10), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1}
 		sendMessage(response)
 
 def handleGet(msg):
 	if myNodeType == LEADER:
-		value = database[msg['key']]
+		value = ''
+		if msg['key'] in database:
+			value = database[msg['key']]
 		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok','MID': msg['MID'], 'value': value}
+		print my_id, "HANDING GET"
+		print "get msg was", msg
+		print "responding w", response
 		sendMessage(response)
 	elif myNodeType == FOLLOWER:
 		redirect(msg)
@@ -210,6 +218,8 @@ def redirect(msg):
 def commitIfNecessary():
 	global lastApplied
 	if commitIdx > lastApplied and len(log) > 0:
+		print "Last applied is", lastApplied
+		print "Log len  is", len(log)
 		entry = log[lastApplied + 1]
 		database[entry[1][0]] = entry[1][1]
 		if myNodeType == LEADER:
