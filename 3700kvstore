@@ -75,7 +75,7 @@ def handleRequestVote(msg):
 def handleAppendEntry(msg):
 	global commitIdx, log
 	if msg['term'] < currentTerm: 
-		response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
+		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
 		sendMessage(response)
 	# TODO also check prevlogidx
 	else:
@@ -85,7 +85,7 @@ def handleAppendEntry(msg):
 		if 'entries' in msg:
 			entries = msg['entries']
 			if msg['logLen'] - len(entries) > len(log):
-				response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
+				response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
 				sendMessage(response)
 			for i in range(len(entries)):
 				entry = entries[i]
@@ -93,7 +93,7 @@ def handleAppendEntry(msg):
 				if len(log) > entryIdx:
 					if entry[0] != log[entryIdx][0]:
 						log = log[:entryIdx]
-						response = {'src': my_id, 'dst': msg['dst'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
+						response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
 						sendMessage(response)
 						return
 					else:
@@ -123,6 +123,9 @@ def updateCommitIndex(logIdx):
 
 def handleRejectAppendEntry(msg):
 	id = msg['src']
+	print my_id, "got rejected :("
+	print "nextidx list is", nextIdx
+	print "looking for", id
 	nextIdx[id] = nextIdx[id] - 1
 	entries = log[nextIdx[id]:]
 	response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': len(log), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1}
