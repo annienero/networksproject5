@@ -64,13 +64,14 @@ def sendMessage(msg):
 
 def handleRequestVote(msg):
 	global leader, votedFor
-	if currentTerm  <=  msg['term'] and (not votedFor or votedFor == msg['candidateId']) and msg['lastLogIdx'] >= len(log) - 1 and msg['lastLogTerm'] >= log[len(log) - 1][0]:
-		# vote for them!
-		myNodeType = FOLLOWER
-		leader = LEADER_UNKNOWN
-		votedFor = msg['candidateId']
-		response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': VOTE, 'term': msg['term'], 'candidateId': votedFor, 'MID': msg['MID']}
-		sendMessage(response)
+	if currentTerm  <=  msg['term'] and (not votedFor or votedFor == msg['candidateId']):
+		if len(log) == 0 or (msg['lastLogIdx'] >= len(log) - 1 and msg['lastLogTerm'] >= log[len(log) - 1][0]):
+			# vote for them!
+			myNodeType = FOLLOWER
+			leader = LEADER_UNKNOWN
+			votedFor = msg['candidateId']
+			response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': VOTE, 'term': msg['term'], 'candidateId': votedFor, 'MID': msg['MID']}
+			sendMessage(response)
 	else:
 		# reply false
 		response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': NO_VOTE, 'term': msg['term'], 'candidateId': msg['candidateId'], 'MID': msg['MID']}
