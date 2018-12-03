@@ -66,6 +66,7 @@ def handleRequestVote(msg):
 	global leader, votedFor
 	if currentTerm  <=  msg['term'] and (not votedFor or votedFor == msg['candidateId']): # TODO also check candidate's log is at least as up-to-date as ours
 		# vote for them!
+		myNodeType = FOLLOWER
 		leader = LEADER_UNKNOWN
 		votedFor = msg['candidateId']
 		response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': VOTE, 'term': msg['term'], 'candidateId': votedFor, 'MID': msg['MID']}
@@ -164,7 +165,7 @@ def handleNoVote(msg):
 
 def becomeLeader():
 	global leader, myNodeType, electionTimeout, votedFor, myVotes, voteRequestWhitelist, nextIdx, matchIdx
-	print "BECOMING LEADER", my_id
+	print my_id, "BECOMING LEADER for term", currentTerm
 	myNodeType = LEADER
 	electionTimeout = random.randint(150,300) / 1000
 	votedFor = None
@@ -245,6 +246,7 @@ while True:
 		elif msg['type'] == 'put':
 			handlePut(msg)
 		elif msg['type'] == REQUEST_VOTE:
+			print my_id, "got request for", msg['candidateId']
 			handleRequestVote(msg)
 		elif msg['type'] == VOTE:
 			if not myNodeType == LEADER: handleVote(msg)
@@ -263,6 +265,7 @@ while True:
 	else:
 		clock = time.time()
 		if clock - last > electionTimeout:
+			print my_id, "timed out during term", currentTerm
 			leader = LEADER_UNKNOWN
 			electionTimeout = float(random.randint(500, 1000)) / 1000
 			currentTerm += 1
