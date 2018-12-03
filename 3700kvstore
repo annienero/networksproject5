@@ -32,6 +32,8 @@ replica_ids = sys.argv[2:]
 nextIdx = {}
 matchIdx = {}
 
+candidateQueue = []
+
 voteRequestWhitelist = replica_ids[:]
 
 # number of nodes needed for majority
@@ -113,6 +115,8 @@ def handleAcceptAppendEntry(msg):
 	nextIdx[id] = msg['logLen']
 	matchIdx[id] = msg['logLen'] - 1
 	updateCommitIndex(matchIdx[id])
+	for msg in candidateQueue:
+		redirect(msg)
 
 def updateCommitIndex(logIdx):
 	global commitIdx
@@ -186,8 +190,7 @@ def handlePut(msg):
 	elif myNodeType == FOLLOWER:
 		redirect(msg)
 	else:
-		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'fail', 'MID': msg['MID']}
-		sendMessage(response)
+		candidateQueue.append(msg)
 
 def notifyFollowersOfPut():
 	for id in replica_ids:
@@ -208,8 +211,7 @@ def handleGet(msg):
 	elif myNodeType == FOLLOWER:
 		redirect(msg)
 	else:
-		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'fail', 'MID': msg['MID']}
-		sendMessage(response)
+		candidateQueue.append(msg)
 
 def redirect(msg):
 	response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'redirect', 'MID': msg['MID']}
