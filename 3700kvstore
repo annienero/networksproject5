@@ -64,7 +64,7 @@ def sendMessage(msg):
 
 def handleRequestVote(msg):
 	global leader, votedFor
-	if currentTerm  <=  msg['term'] and (not votedFor or votedFor == msg['candidateId']): # TODO also check candidate's log is at least as up-to-date as ours
+	if currentTerm  <=  msg['term'] and (not votedFor or votedFor == msg['candidateId']) and msg['lastLogIdx'] >= len(log) - 1 and msg['lastLogTerm'] >= log[len(log) - 1][0]:
 		# vote for them!
 		myNodeType = FOLLOWER
 		leader = LEADER_UNKNOWN
@@ -78,10 +78,9 @@ def handleRequestVote(msg):
 
 def handleAppendEntry(msg):
 	global commitIdx, log, lastApplied
-	if msg['term'] < currentTerm: 
+	if msg['term'] < currentTerm or ('prevLogIdx' in msg and (len(log) > msg['prevLogIdx'] and log[msg['prevLogIdx']][0] != msg['prevLogTerm'])): 
 		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
 		sendMessage(response)
-	# TODO also check prevlogidx
 	else:
 		resetFollower(msg)
 		if msg['commitIdx'] > commitIdx:
@@ -133,7 +132,7 @@ def handleRejectAppendEntry(msg):
 	if nextIdx[id] > 0:
 		nextIdx[id] = nextIdx[id] - 1
 		entries = log[nextIdx[id]:min(len(log), nextIdx[id] + 10)]
-		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': min(len(log), nextIdx[id] + 10), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1}
+		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': min(len(log), nextIdx[id] + 10), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1, 'prevLogTerm': log[nextIdx[id] - 1][0]}
 		sendMessage(response)
 
 def resetFollower(msg):
@@ -196,7 +195,7 @@ def handlePut(msg):
 def notifyFollowersOfPut():
 	for id in replica_ids:
 		entries = log[nextIdx[id]:min(len(log), nextIdx[id] + 10)]
-		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': min(len(log), nextIdx[id] + 10), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1}
+		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': min(len(log), nextIdx[id] + 10), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1, 'prevLogTerm': log[nextIdx[id] - 1][0]}
 		sendMessage(response)
 
 def handleGet(msg):
@@ -271,9 +270,12 @@ while True:
 			currentTerm += 1
 			myNodeType = CANDIDATE
 			votedFor = my_id
-			# issue RequestVote RPCs in parallel (TODO) to each of the other servers in the cluster
+			# issue RequestVote RPCs to each of the other servers in the cluster
+			lastLogTerm = -1
+			if len(log) > 0:
+				lastLogTerm = log[len(log) - 1][0]
 			for id in replica_ids:
-				msg = {'src': my_id, 'dst': id, 'leader': LEADER_UNKNOWN, 'type': REQUEST_VOTE, 'term': currentTerm, 'candidateId': my_id, 'MID': generateMID()}
+				msg = {'src': my_id, 'dst': id, 'leader': LEADER_UNKNOWN, 'type': REQUEST_VOTE, 'term': currentTerm, 'candidateId': my_id, 'MID': generateMID(), 'lastLogIdx': len(log) - 1, 'lastLogTerm': lastLogTerm}
 				sendMessage(msg)
 
 	commitIfNecessary()
