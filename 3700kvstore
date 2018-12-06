@@ -110,14 +110,16 @@ def handleAppendEntry(msg):
 def replyAppendEntrySuccess(msg):
 	response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': ACCEPT_APPEND_ENTRY, 'MID': msg['MID'], 'commitIdx': commitIdx, 'logLen': len(log)}
 	sendMessage(response)
+	for msg in candidateQueue:
+		redirect(msg)
+	candidateQueue = []
 
 def handleAcceptAppendEntry(msg):
 	id = msg['src']
 	nextIdx[id] = msg['logLen']
 	matchIdx[id] = msg['logLen'] - 1
 	updateCommitIndex(matchIdx[id])
-	for msg in candidateQueue:
-		redirect(msg)
+
 
 def updateCommitIndex(logIdx):
 	global commitIdx
@@ -262,6 +264,7 @@ while True:
 	if myNodeType == LEADER:
 		if time.time() - lastHeartbeat > .25:
 			sendHeartbeat()
+			notifyFollowersOfPut()
 	else:
 		clock = time.time()
 		if clock - last > electionTimeout:
