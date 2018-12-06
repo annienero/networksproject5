@@ -79,7 +79,7 @@ def handleRequestVote(msg):
 
 def handleAppendEntry(msg):
 	global commitIdx, log, lastApplied
-	if msg['term'] < currentTerm or ('prevLogIdx' in msg and (len(log) > msg['prevLogIdx'] and log[msg['prevLogIdx']][0] != msg['prevLogTerm'])): 
+	if msg['term'] < currentTerm or ('prevLogIdx' in msg and (msg['prevLogIdx'] in log and log[msg['prevLogIdx']][0] != msg['prevLogTerm'])):		
 		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
 		sendMessage(response)
 	else:
@@ -108,12 +108,8 @@ def handleAppendEntry(msg):
 		replyAppendEntrySuccess(msg)
 
 def replyAppendEntrySuccess(msg):
-	global candidateQueue
 	response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': ACCEPT_APPEND_ENTRY, 'MID': msg['MID'], 'commitIdx': commitIdx, 'logLen': len(log)}
 	sendMessage(response)
-	for msg in candidateQueue:
-		redirect(msg)
-	candidateQueue = []
 
 def handleAcceptAppendEntry(msg):
 	id = msg['src']
@@ -140,7 +136,7 @@ def handleRejectAppendEntry(msg):
 		sendMessage(response)
 
 def resetFollower(msg):
-	global leader, myNodeType, currentTerm, voteRequestWhitelist, votedFor, myVotes
+	global candidateQueue, leader, myNodeType, currentTerm, voteRequestWhitelist, votedFor, myVotes
 	leader = msg['leader']
 	myNodeType = FOLLOWER
 	currentTerm = msg['term']
@@ -149,6 +145,9 @@ def resetFollower(msg):
 	#print my_id, "RECOGNIZING", leader, "AS LEADER"
 	#print my_id, "updated term to", currentTerm
 	voteRequestWhitelist = replica_ids[:]
+	for msg in candidateQueue:
+                redirect(msg)
+        candidateQueue = []
 	
 def handleVote(msg):
 	global myVotes
@@ -177,7 +176,7 @@ def becomeLeader():
 	sendHeartbeat()
 	voteRequestWhitelist = replica_ids[:]
 	for id in replica_ids:
-		nextIdx[id] = len(log)
+		nextIdx[id] = commitIdx + 1
 		matchIdx[id] = 0
 
 def sendHeartbeat():
@@ -192,10 +191,23 @@ def handlePut(msg):
 		log.append((currentTerm, (msg['key'], msg['value']), msg['src'], msg['MID']))
 		notifyFollowersOfPut()
 	elif myNodeType == FOLLOWER:
-		redirect(msg)
+		if not checkInCandidateQueue(msg):
+			candidateQueue.append(msg)
+			print my_id, "adding put to q"
 	else:
 		candidateQueue.append(msg)
 
+def checkInCandidateQueue(msg):
+	if 'value' in msg:
+		for message in candidateQueue:
+        		if message['key'] == msg['key'] and 'value' in message and message['value'] == msg['value']:
+                		return True
+        	return False
+	else:
+		for message in candidateQueue:
+                        if message['key'] == msg['key'] and 'value' not in message:
+                                return True
+                return False
 def notifyFollowersOfPut():
 	for id in replica_ids:
 		entries = log[nextIdx[id]:min(len(log), nextIdx[id] + 10)]
@@ -213,9 +225,11 @@ def handleGet(msg):
 		print "responding w", response
 		sendMessage(response)
 	elif myNodeType == FOLLOWER:
-		redirect(msg)
-	else:
-		candidateQueue.append(msg)
+		if not checkInCandidateQueue(msg):
+                        candidateQueue.append(msg)
+			print my_id, "adding get to q"
+        else:
+                candidateQueue.append(msg)
 
 def redirect(msg):
 	response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'redirect', 'MID': msg['MID']}
@@ -225,7 +239,6 @@ def commitIfNecessary():
 	global lastApplied
 	if commitIdx > lastApplied and len(log) > 0:
 		print "Last applied is", lastApplied
-		print "Log len  is", len(log)
 		entry = log[lastApplied + 1]
 		database[entry[1][0]] = entry[1][1]
 		if myNodeType == LEADER:
@@ -240,8 +253,9 @@ while True:
 	if sock in ready:
 		msg_raw = sock.recv(32768)
 		if len(msg_raw) == 0: continue
-		last = time.time()
 		msg = json.loads(msg_raw)
+		if msg['src'] in replica_ids:
+			last = time.time()
 		if 'term' in msg and msg['term'] > currentTerm:
 			resetFollower(msg)
 		if msg['type'] == 'get':
@@ -265,7 +279,8 @@ while True:
 	if myNodeType == LEADER:
 		if time.time() - lastHeartbeat > .25:
 			sendHeartbeat()
-			notifyFollowersOfPut()
+			if len(log) > 0:
+				notifyFollowersOfPut()
 	else:
 		clock = time.time()
 		if clock - last > electionTimeout:
