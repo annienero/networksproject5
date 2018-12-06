@@ -131,8 +131,13 @@ def handleRejectAppendEntry(msg):
 	id = msg['src']
 	if nextIdx[id] > 0:
 		nextIdx[id] = nextIdx[id] - 1
+		prevLogIdx = nextIdx[id] - 1
+		prevLogTerm = -1 #default value for if prevLogIdx is invalid
+		if prevLogIdx in log:
+			prevLogTerm = log[nextIdx[id] - 1][0]
 		entries = log[nextIdx[id]:min(len(log), nextIdx[id] + 10)]
-		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': min(len(log), nextIdx[id] + 10), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': nextIdx[id] - 1, 'prevLogTerm': log[nextIdx[id] - 1][0]}
+		print my_id, "next idx - 1 for", id, "is", nextIdx[id] - 1
+		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': min(len(log), nextIdx[id] + 10), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': prevLogIdx, 'prevLogTerm': prevLogTerm}
 		sendMessage(response)
 
 def resetFollower(msg):
@@ -236,7 +241,8 @@ def redirect(msg):
 	sendMessage(response)
 
 def commitIfNecessary():
-	global lastApplied
+	global lastApplied, commitIdx
+	commitIdx = min(commitIdx, len(log) - 1)
 	if commitIdx > lastApplied and len(log) > 0:
 		print "Last applied is", lastApplied
 		entry = log[lastApplied + 1]
@@ -257,7 +263,9 @@ while True:
 		if msg['src'] in replica_ids:
 			last = time.time()
 		if 'term' in msg and msg['term'] > currentTerm:
-			resetFollower(msg)
+			currentTerm = msg['term']
+			myNodeType = FOLLOWER
+			leader = LEADER_UNKNOWN
 		if msg['type'] == 'get':
 			handleGet(msg)
 		elif msg['type'] == 'put':
