@@ -290,6 +290,7 @@ while True:
 			currentTerm += 1
 			myNodeType = CANDIDATE
 			votedFor = my_id
+			myVotes = 1
 			# issue RequestVote RPCs to each of the other servers in the cluster
 			lastLogTerm = -1
 			if len(log) > 0:
