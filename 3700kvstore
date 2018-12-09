@@ -13,7 +13,8 @@ VOTE = 'vote'
 APPEND_ENTRY = 'appendEntry'
 ACCEPT_APPEND_ENTRY = 'acceptAppendEntry'
 REJECT_APPEND_ENTRY = 'rejectAppendEntry'
-HEARTBEAT_TIME = .075
+HEARTBEAT_TIME = .025
+STALENESS_THRESHOLD = .1
 
 myNodeType = FOLLOWER
 electionTimeout = float(random.randint(150, 300)) / 1000
@@ -218,7 +219,7 @@ def handleGet(msg):
 	if myNodeType == LEADER:
 		recentResponses = 1
 		for key in timeSinceHeartbeatResponse:
-			if time.time() - timeSinceHeartbeatResponse[key] < HEARTBEAT_TIME:
+			if time.time() - timeSinceHeartbeatResponse[key] < STALENESS_THRESHOLD:
 				recentResponses += 1
 		if recentResponses >= majority:
 			value = ''
