@@ -61,13 +61,14 @@ def sendMessage(msg):
 
 def handleRequestVote(msg):
 	global leader, votedFor
-	if currentTerm  <=  msg['term'] and (not votedFor or votedFor == msg['candidateId']):
+	if currentTerm  <=  msg['term'] and not votedFor:
 		if len(log) == 0 or (msg['lastLogIdx'] >= len(log) - 1 and msg['lastLogTerm'] >= log[len(log) - 1][0]):
 			# vote for them!
 			myNodeType = FOLLOWER
 			leader = LEADER_UNKNOWN
 			votedFor = msg['candidateId']
 			response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': VOTE, 'term': msg['term'], 'candidateId': votedFor, 'MID': msg['MID']}
+			print my_id, "voting for", votedFor, "term", currentTerm
 			sendMessage(response)
 
 def handleAppendEntry(msg):
@@ -82,8 +83,7 @@ def handleAppendEntry(msg):
 			commitIdx = min(msg['commitIdx'], len(log) - 1)
 		if 'entries' in msg:
 			entries = msg['entries']
-			print my_id, "got entries with prevLogIdx", msg['prevLogIdx'], "my log is len", len(log) 
-
+			print my_id, "got entries with prevLogIdx", msg['prevLogIdx'], "my log is len", len(log), "w commitidx", commitIdx, "len of entries is", len(entries), "end idx for new entries is", msg['logLen']
 			if msg['logLen'] - len(entries) > len(log):
 				print my_id, "rejecting entries because of hole"
 				response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
@@ -237,7 +237,7 @@ def commitIfNecessary():
 	global lastApplied, commitIdx
 	commitIdx = min(commitIdx, len(log) - 1)
 	if commitIdx > lastApplied and len(log) > 0:
-		print "Last applied is", lastApplied
+		print my_id, "Last applied is", lastApplied
 		entry = log[lastApplied + 1]
 		database[entry[1][0]] = entry[1][1]
 		if myNodeType == LEADER:
@@ -264,9 +264,10 @@ while True:
 		elif msg['type'] == 'put':
 			handlePut(msg)
 		elif msg['type'] == REQUEST_VOTE:
-			print my_id, "got request for", msg['candidateId']
+			print my_id, "got request for", msg['candidateId'], "for term", msg['term'], "during term", currentTerm, "my voted for is", votedFor, "len of my log is", len(log), "msg[lastlogidx] is", msg['lastLogIdx'], "msg[lastlogterm] is", msg['lastLogTerm'], "term of my last entry is", log[len(log) - 1][0]
 			handleRequestVote(msg)
 		elif msg['type'] == VOTE:
+			print my_id, "got vote from", msg['src'], "for term", currentTerm
 			if not myNodeType == LEADER: handleVote(msg)
 		elif msg['type'] == APPEND_ENTRY:
 			handleAppendEntry(msg)
@@ -291,6 +292,7 @@ while True:
 			currentTerm += 1
 			myNodeType = CANDIDATE
 			votedFor = my_id
+			myVotes = 1
 			# issue RequestVote RPCs to each of the other servers in the cluster
 			lastLogTerm = -1
 			if len(log) > 0:

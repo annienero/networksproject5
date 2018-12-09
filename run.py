@@ -275,7 +275,8 @@ class Replica:
             self.client_sock = None
             self.proc.kill()
             self.proc.wait()
-            os.unlink(self.rid)
+            try: os.unlink(self.rid)
+            except: pass
 
     def deliver(self, raw_msg):
         if self.alive:
