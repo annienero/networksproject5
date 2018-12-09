@@ -13,9 +13,10 @@ VOTE = 'vote'
 APPEND_ENTRY = 'appendEntry'
 ACCEPT_APPEND_ENTRY = 'acceptAppendEntry'
 REJECT_APPEND_ENTRY = 'rejectAppendEntry'
+HEARTBEAT_TIME = .075
 
 myNodeType = FOLLOWER
-electionTimeout = float(random.randint(500, 1000)) / 1000
+electionTimeout = float(random.randint(150, 300)) / 1000
 currentTerm = 0
 votedFor = None
 myVotes = 1
@@ -217,7 +218,7 @@ def handleGet(msg):
 	if myNodeType == LEADER:
 		recentResponses = 1
 		for key in timeSinceHeartbeatResponse:
-			if time.time() - timeSinceHeartbeatResponse[key] < .25:
+			if time.time() - timeSinceHeartbeatResponse[key] < HEARTBEAT_TIME:
 				recentResponses += 1
 		if recentResponses >= majority:
 			value = ''
@@ -292,7 +293,7 @@ while True:
 			handleRejectAppendEntry(msg)
 
 	if myNodeType == LEADER:
-		if time.time() - lastHeartbeat > .25:
+		if time.time() - lastHeartbeat > HEARTBEAT_TIME:
 			if len(log) > 0:
 				notifyFollowersOfPut()
 			else:
@@ -303,7 +304,7 @@ while True:
 		clock = time.time()
 		if clock - last > electionTimeout:
 			leader = LEADER_UNKNOWN
-			electionTimeout = float(random.randint(500, 1000)) / 1000
+			electionTimeout = float(random.randint(150, 300)) / 1000
 			print my_id, "timed out during term", currentTerm, "as a", myNodeType, "new election timeout is", electionTimeout
 			currentTerm += 1
 			myNodeType = CANDIDATE
