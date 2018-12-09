@@ -206,14 +206,14 @@ def handleGet(msg):
 		for key in timeSinceHeartbeatResponse:
 			if time.time() - timeSinceHeartbeatResponse[key] < STALENESS_THRESHOLD:
 				recentResponses += 1
-		if recentResponses >= majority:
-			value = ''
-			if msg['key'] in database:
-				value = database[msg['key']]
-			response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok','MID': msg['MID'], 'value': value}
-			sendMessage(response)
-		else:
-			redirectGet(msg)
+		#if recentResponses >= majority:
+		value = ''
+		if msg['key'] in database:
+			value = database[msg['key']]
+		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok','MID': msg['MID'], 'value': value}
+		sendMessage(response)
+		#else:
+			#redirectGet(msg)
 	else:
 		if not checkInCandidateQueue(msg):
                         candidateQueue.append(msg)
