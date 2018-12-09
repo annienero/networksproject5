@@ -218,16 +218,14 @@ def handleGet(msg):
 		if msg['key'] in database:
 			value = database[msg['key']]
 		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok','MID': msg['MID'], 'value': value}
-		print my_id, "HANDING GET"
-		print "get msg was", msg
-		print "responding w", response
+		print my_id, "HANDING GET", myNodeType, currentTerm
 		sendMessage(response)
-	elif myNodeType == FOLLOWER:
+	else:
 		if not checkInCandidateQueue(msg):
                         candidateQueue.append(msg)
 			print my_id, "adding get to q"
-        else:
-                candidateQueue.append(msg)
+        	else:
+                	candidateQueue.append(msg)
 
 def redirect(msg):
 	response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'redirect', 'MID': msg['MID']}
@@ -246,7 +244,7 @@ def commitIfNecessary():
 			sendMessage(response)
 		lastApplied += 1
 
-last = 0
+last = time.time()
 while True:
 	ready = select.select([sock], [], [], 0.1)[0]	
 	if sock in ready:
@@ -287,12 +285,13 @@ while True:
 			else:
 				sendHeartbeat()
 			lastHeartbeat = time.time()
+	#print "clock:", clock, ", last:", last, ", clock-last:", (clock-last),  ", electionTimeout:", electionTimeout
 	else:
 		clock = time.time()
 		if clock - last > electionTimeout:
-			print my_id, "timed out during term", currentTerm
 			leader = LEADER_UNKNOWN
 			electionTimeout = float(random.randint(500, 1000)) / 1000
+			print my_id, "timed out during term", currentTerm, "as a", myNodeType, "new election timeout is", electionTimeout
 			currentTerm += 1
 			myNodeType = CANDIDATE
 			votedFor = my_id
@@ -304,5 +303,5 @@ while True:
 			for id in replica_ids:
 				msg = {'src': my_id, 'dst': id, 'leader': LEADER_UNKNOWN, 'type': REQUEST_VOTE, 'term': currentTerm, 'candidateId': my_id, 'MID': generateMID(), 'lastLogIdx': len(log) - 1, 'lastLogTerm': lastLogTerm}
 				sendMessage(msg)
-
+			last = time.time()
 	commitIfNecessary()
