@@ -179,8 +179,6 @@ def handlePut(msg):
 	else:
                 if not checkInCandidateQueue(msg):
                         candidateQueue.append(msg)
-                else:
-                        candidateQueue.append(msg)
 def checkInCandidateQueue(msg):
 	if 'value' in msg:
 		for message in candidateQueue:
@@ -219,8 +217,6 @@ def handleGet(msg):
 	else:
 		if not checkInCandidateQueue(msg):
                         candidateQueue.append(msg)
-        	else:
-                	candidateQueue.append(msg)
 
 def redirectGet(msg):
 	response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': 'redirect','MID': msg['MID']}
