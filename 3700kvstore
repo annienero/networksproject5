@@ -32,8 +32,7 @@ nextIdx = {}
 matchIdx = {}
 
 candidateQueue = []
-recentHeartbeatOks = []
-pendingGetRequests = []
+timeSinceHeartbeatResponse = {}
 
 # number of nodes needed for majority
 majority = int((len(replica_ids) + 1) / 2) + 1
@@ -116,8 +115,7 @@ def handleAcceptAppendEntry(msg):
 	nextIdx[id] = msg['logLen']
 	matchIdx[id] = msg['logLen'] - 1
 	updateCommitIndex(matchIdx[id])
-	if msg['src'] not in recentHeartbeatOks:
-                recentHeartbeatOks.append(msg['src'])
+	timeSinceHeartbeatResponse[msg['src']] = time.time()
 
 def updateCommitIndex(logIdx):
 	global commitIdx
@@ -141,8 +139,7 @@ def handleRejectAppendEntry(msg):
 		print my_id, "next idx - 1 for", id, "is", nextIdx[id] - 1
 		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': min(len(log), nextIdx[id] + 10), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': prevLogIdx, 'prevLogTerm': prevLogTerm}
 		sendMessage(response)
-	if msg['src'] not in recentHeartbeatOks:
-                recentHeartbeatOks.append(msg['src'])
+	timeSinceHeartbeatResponse[msg['src']] = time.time()
 
 def resetFollower(msg):
 	global candidateQueue, leader, myNodeType, currentTerm, votedFor, myVotes
@@ -218,12 +215,19 @@ def notifyFollowersOfPut():
 
 def handleGet(msg):
 	if myNodeType == LEADER:
-		value = ''
-		if msg['key'] in database:
-			value = database[msg['key']]
-		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok','MID': msg['MID'], 'value': value}
-		print my_id, "HANDING GET", myNodeType, currentTerm
-		sendMessage(response)
+		recentResponses = 1
+		for key in timeSinceHeartbeatResponse:
+			if time.time() - timeSinceHeartbeatResponse[key] < .25:
+				recentResponses += 1
+		if recentResponses >= majority:
+			value = ''
+			if msg['key'] in database:
+				value = database[msg['key']]
+			response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok','MID': msg['MID'], 'value': value}
+			print my_id, "HANDING GET", myNodeType, currentTerm
+			sendMessage(response)
+		else:
+			redirectGet(msg)
 	else:
 		if not checkInCandidateQueue(msg):
                         candidateQueue.append(msg)
@@ -231,7 +235,7 @@ def handleGet(msg):
         	else:
                 	candidateQueue.append(msg)
 
-def rejectGet(msg):
+def redirectGet(msg):
 	response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': 'redirect','MID': msg['MID']}
         print my_id, "rejecting GET", myNodeType, currentTerm
         sendMessage(response)
@@ -268,7 +272,7 @@ while True:
 			leader = LEADER_UNKNOWN
 			votedFor = None
 		if msg['type'] == 'get':
-			pendingGetRequests.append(msg)
+			handleGet(msg)
 		elif msg['type'] == 'put':
 			handlePut(msg)
 		elif msg['type'] == REQUEST_VOTE:
@@ -289,15 +293,6 @@ while True:
 
 	if myNodeType == LEADER:
 		if time.time() - lastHeartbeat > .25:
-			if len(recentHeartbeatOks) + 1 >= majority:
-				for r in pendingGetRequests:
-					handleGet(r)
-			else:
-				#fail the get requests
-				for r in pendingGetRequests:
-                                        rejectGet(r)
-			pendingGetRequests = []
-			recentHeartbeatOks = []
 			if len(log) > 0:
 				notifyFollowersOfPut()
 			else:
