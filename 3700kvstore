@@ -259,6 +259,7 @@ while True:
 			currentTerm = msg['term']
 			myNodeType = FOLLOWER
 			leader = LEADER_UNKNOWN
+			votedFor = None
 		if msg['type'] == 'get':
 			handleGet(msg)
 		elif msg['type'] == 'put':
