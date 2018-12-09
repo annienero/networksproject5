@@ -60,7 +60,6 @@ def generateMID():
 
 def sendMessage(msg):
 	sock.send(json.dumps(msg))
-	print '%s sending %s message to %s' % (msg['src'], msg['type'], msg['dst'])
 
 def handleRequestVote(msg):
 	global leader, votedFor
@@ -71,13 +70,11 @@ def handleRequestVote(msg):
 			leader = LEADER_UNKNOWN
 			votedFor = msg['candidateId']
 			response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': VOTE, 'term': msg['term'], 'candidateId': votedFor, 'MID': msg['MID']}
-			print my_id, "voting for", votedFor, "term", currentTerm
 			sendMessage(response)
 
 def handleAppendEntry(msg):
 	global commitIdx, log, lastApplied
 	if msg['term'] < currentTerm or ('prevLogIdx' in msg and (msg['prevLogIdx'] in log and log[msg['prevLogIdx']][0] != msg['prevLogTerm'])):		
-		print my_id, "---- msg[term] < currentTerm = ", msg['term'] < currentTerm
 		response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'term': currentTerm, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
 		sendMessage(response)
 	else:
@@ -86,9 +83,7 @@ def handleAppendEntry(msg):
 			commitIdx = min(msg['commitIdx'], len(log) - 1)
 		if 'entries' in msg:
 			entries = msg['entries']
-			print my_id, "got entries with prevLogIdx", msg['prevLogIdx'], "my log is len", len(log), "w commitidx", commitIdx, "len of entries is", len(entries), "end idx for new entries is", msg['logLen']
 			if msg['logLen'] - len(entries) > len(log):
-				print my_id, "rejecting entries because of hole"
 				response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
 				sendMessage(response)
 			for i in range(len(entries)):
@@ -97,7 +92,6 @@ def handleAppendEntry(msg):
 				if len(log) > entryIdx:
 					if entry[0] != log[entryIdx][0]:
 						log = log[:entryIdx]
-						print my_id, "just CHOPPED to length", len(log)
 						lastApplied = entryIdx - 1
 						response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
 						sendMessage(response)
@@ -130,7 +124,6 @@ def updateCommitIndex(logIdx):
 
 def handleRejectAppendEntry(msg):
 	id = msg['src']
-	print my_id, "got reject from", id, "whose nextidx is", nextIdx[id]
 	if nextIdx[id] > 0:
 		nextIdx[id] = nextIdx[id] - 1
 		prevLogIdx = nextIdx[id] - 1
@@ -138,7 +131,6 @@ def handleRejectAppendEntry(msg):
 		if prevLogIdx in log:
 			prevLogTerm = log[nextIdx[id] - 1][0]
 		entries = log[nextIdx[id]:min(len(log), nextIdx[id] + 10)]
-		print my_id, "next idx - 1 for", id, "is", nextIdx[id] - 1
 		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': min(len(log), nextIdx[id] + 10), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': prevLogIdx, 'prevLogTerm': prevLogTerm}
 		sendMessage(response)
 	timeSinceHeartbeatResponse[msg['src']] = time.time()
@@ -150,8 +142,6 @@ def resetFollower(msg):
 	currentTerm = msg['term']
 	votedFor = None
 	myVotes = 1
-	#print my_id, "RECOGNIZING", leader, "AS LEADER"
-	#print my_id, "updated term to", currentTerm
 	for msg in candidateQueue:
                 redirect(msg)
         candidateQueue = []
@@ -166,7 +156,6 @@ def handleVote(msg):
 
 def becomeLeader():
 	global leader, myNodeType, electionTimeout, votedFor, myVotes, nextIdx, matchIdx
-	print my_id, "BECOMING LEADER for term", currentTerm
 	myNodeType = LEADER
 	electionTimeout = random.randint(150,300) / 1000
 	votedFor = None
@@ -190,7 +179,6 @@ def handlePut(msg):
 	else:
                 if not checkInCandidateQueue(msg):
                         candidateQueue.append(msg)
-                        print my_id, "adding get to q"
                 else:
                         candidateQueue.append(msg)
 def checkInCandidateQueue(msg):
@@ -211,7 +199,6 @@ def notifyFollowersOfPut():
                 if prevLogIdx in log:
                         prevLogTerm = log[nextIdx[id] - 1][0]
                 entries = log[nextIdx[id]:min(len(log), nextIdx[id] + 10)]
-                print my_id, "next idx - 1 for", id, "is", nextIdx[id] - 1
                 response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': min(len(log), nextIdx[id] + 10), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': prevLogIdx, 'prevLogTerm': prevLogTerm}
                 sendMessage(response)
 
@@ -226,20 +213,17 @@ def handleGet(msg):
 			if msg['key'] in database:
 				value = database[msg['key']]
 			response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'ok','MID': msg['MID'], 'value': value}
-			print my_id, "HANDING GET", myNodeType, currentTerm
 			sendMessage(response)
 		else:
 			redirectGet(msg)
 	else:
 		if not checkInCandidateQueue(msg):
                         candidateQueue.append(msg)
-			print my_id, "adding get to q"
         	else:
                 	candidateQueue.append(msg)
 
 def redirectGet(msg):
 	response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': 'redirect','MID': msg['MID']}
-        print my_id, "rejecting GET", myNodeType, currentTerm
         sendMessage(response)
 
 def redirect(msg):
@@ -250,11 +234,9 @@ def commitIfNecessary():
 	global lastApplied, commitIdx
 	commitIdx = min(commitIdx, len(log) - 1)
 	if commitIdx > lastApplied and len(log) > 0:
-		print my_id, "Last applied is", lastApplied
 		entry = log[lastApplied + 1]
 		database[entry[1][0]] = entry[1][1]
 		if myNodeType == LEADER:
-	#		print "sending ok for lastapplied", lastApplied
 			response = {'src': my_id, 'dst': entry[2], 'leader': leader, 'type': 'ok', 'MID': entry[3]}
 			sendMessage(response)
 		lastApplied += 1
@@ -278,13 +260,8 @@ while True:
 		elif msg['type'] == 'put':
 			handlePut(msg)
 		elif msg['type'] == REQUEST_VOTE:
-			if len(log) > 0:
-				print my_id, "got request for", msg['candidateId'], "for term", msg['term'], "during term", currentTerm, "my voted for is", votedFor, "len of my log is", len(log), "msg[lastlogidx] is", msg['lastLogIdx'], "msg[lastlogterm] is", msg['lastLogTerm'], "term of my last entry is", log[len(log) - 1][0]
-			else:
-				print my_id, "got request for", msg['candidateId'], "for term", msg['term'], "during term", currentTerm, "my voted for is", votedFor, "len of my log is", len(log)
 			handleRequestVote(msg)
 		elif msg['type'] == VOTE:
-			print my_id, "got vote from", msg['src'], "for term", currentTerm
 			if not myNodeType == LEADER: handleVote(msg)
 		elif msg['type'] == APPEND_ENTRY:
 			handleAppendEntry(msg)
@@ -300,13 +277,11 @@ while True:
 			else:
 				sendHeartbeat()
 			lastHeartbeat = time.time()
-	#print "clock:", clock, ", last:", last, ", clock-last:", (clock-last),  ", electionTimeout:", electionTimeout
 	else:
 		clock = time.time()
 		if clock - last > electionTimeout:
 			leader = LEADER_UNKNOWN
 			electionTimeout = float(random.randint(150, 300)) / 1000
-			print my_id, "timed out during term", currentTerm, "as a", myNodeType, "new election timeout is", electionTimeout
 			currentTerm += 1
 			myNodeType = CANDIDATE
 			votedFor = my_id
