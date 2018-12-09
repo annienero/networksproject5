@@ -82,8 +82,7 @@ def handleAppendEntry(msg):
 			commitIdx = min(msg['commitIdx'], len(log) - 1)
 		if 'entries' in msg:
 			entries = msg['entries']
-			print my_id, "got entries with prevLogIdx", msg['prevLogIdx'], "my log is len", len(log) 
-
+			print my_id, "got entries with prevLogIdx", msg['prevLogIdx'], "my log is len", len(log), "w commitidx", commitIdx
 			if msg['logLen'] - len(entries) > len(log):
 				print my_id, "rejecting entries because of hole"
 				response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
@@ -237,7 +236,7 @@ def commitIfNecessary():
 	global lastApplied, commitIdx
 	commitIdx = min(commitIdx, len(log) - 1)
 	if commitIdx > lastApplied and len(log) > 0:
-		print "Last applied is", lastApplied
+		print my_id, "Last applied is", lastApplied
 		entry = log[lastApplied + 1]
 		database[entry[1][0]] = entry[1][1]
 		if myNodeType == LEADER:
