@@ -264,7 +264,10 @@ while True:
 		elif msg['type'] == 'put':
 			handlePut(msg)
 		elif msg['type'] == REQUEST_VOTE:
-			print my_id, "got request for", msg['candidateId'], "for term", msg['term'], "during term", currentTerm, "my voted for is", votedFor, "len of my log is", len(log), "msg[lastlogidx] is", msg['lastLogIdx'], "msg[lastlogterm] is", msg['lastLogTerm'], "term of my last entry is", log[len(log) - 1][0]
+			if len(log) > 0:
+				print my_id, "got request for", msg['candidateId'], "for term", msg['term'], "during term", currentTerm, "my voted for is", votedFor, "len of my log is", len(log), "msg[lastlogidx] is", msg['lastLogIdx'], "msg[lastlogterm] is", msg['lastLogTerm'], "term of my last entry is", log[len(log) - 1][0]
+			else:
+				print my_id, "got request for", msg['candidateId'], "for term", msg['term'], "during term", currentTerm, "my voted for is", votedFor, "len of my log is", len(log)
 			handleRequestVote(msg)
 		elif msg['type'] == VOTE:
 			print my_id, "got vote from", msg['src'], "for term", currentTerm
