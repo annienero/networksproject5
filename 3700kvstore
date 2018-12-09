@@ -82,7 +82,7 @@ def handleAppendEntry(msg):
 			commitIdx = min(msg['commitIdx'], len(log) - 1)
 		if 'entries' in msg:
 			entries = msg['entries']
-			print my_id, "got entries with prevLogIdx", msg['prevLogIdx'], "my log is len", len(log), "w commitidx", commitIdx
+			print my_id, "got entries with prevLogIdx", msg['prevLogIdx'], "my log is len", len(log), "w commitidx", commitIdx, "len of entries is", len(entries), "end idx for new entries is", msg['logLen']
 			if msg['logLen'] - len(entries) > len(log):
 				print my_id, "rejecting entries because of hole"
 				response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': REJECT_APPEND_ENTRY, 'MID': msg['MID']}
