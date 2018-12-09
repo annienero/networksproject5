@@ -232,7 +232,7 @@ def handleGet(msg):
                 	candidateQueue.append(msg)
 
 def rejectGet(msg):
-	response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'fail','MID': msg['MID']}
+	response = {'src': my_id, 'dst': msg['src'], 'leader': LEADER_UNKNOWN, 'type': 'redirect','MID': msg['MID']}
         print my_id, "rejecting GET", myNodeType, currentTerm
         sendMessage(response)
 
