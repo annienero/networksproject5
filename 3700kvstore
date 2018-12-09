@@ -32,6 +32,8 @@ nextIdx = {}
 matchIdx = {}
 
 candidateQueue = []
+recentHeartbeatOks = []
+pendingGetRequests = []
 
 # number of nodes needed for majority
 majority = int((len(replica_ids) + 1) / 2) + 1
@@ -57,7 +59,7 @@ def generateMID():
 
 def sendMessage(msg):
 	sock.send(json.dumps(msg))
-	#print '%s sending %s message to %s' % (msg['src'], msg['type'], msg['dst'])
+	print '%s sending %s message to %s' % (msg['src'], msg['type'], msg['dst'])
 
 def handleRequestVote(msg):
 	global leader, votedFor
@@ -114,7 +116,8 @@ def handleAcceptAppendEntry(msg):
 	nextIdx[id] = msg['logLen']
 	matchIdx[id] = msg['logLen'] - 1
 	updateCommitIndex(matchIdx[id])
-
+	if msg['src'] not in recentHeartbeatOks:
+                recentHeartbeatOks.append(msg['src'])
 
 def updateCommitIndex(logIdx):
 	global commitIdx
@@ -138,6 +141,8 @@ def handleRejectAppendEntry(msg):
 		print my_id, "next idx - 1 for", id, "is", nextIdx[id] - 1
 		response = {'src': my_id, 'dst': id, 'leader': my_id, 'type': APPEND_ENTRY, 'MID': generateMID(), 'entries': entries, 'logLen': min(len(log), nextIdx[id] + 10), 'term': currentTerm, 'commitIdx': commitIdx, 'prevLogIdx': prevLogIdx, 'prevLogTerm': prevLogTerm}
 		sendMessage(response)
+	if msg['src'] not in recentHeartbeatOks:
+                recentHeartbeatOks.append(msg['src'])
 
 def resetFollower(msg):
 	global candidateQueue, leader, myNodeType, currentTerm, votedFor, myVotes
@@ -183,13 +188,12 @@ def handlePut(msg):
 	if myNodeType == LEADER:
 		log.append((currentTerm, (msg['key'], msg['value']), msg['src'], msg['MID']))
 		notifyFollowersOfPut()
-	elif myNodeType == FOLLOWER:
-		if not checkInCandidateQueue(msg):
-			candidateQueue.append(msg)
-			print my_id, "adding put to q"
 	else:
-		candidateQueue.append(msg)
-
+                if not checkInCandidateQueue(msg):
+                        candidateQueue.append(msg)
+                        print my_id, "adding get to q"
+                else:
+                        candidateQueue.append(msg)
 def checkInCandidateQueue(msg):
 	if 'value' in msg:
 		for message in candidateQueue:
@@ -227,6 +231,11 @@ def handleGet(msg):
         	else:
                 	candidateQueue.append(msg)
 
+def rejectGet(msg):
+	response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'fail','MID': msg['MID']}
+        print my_id, "rejecting GET", myNodeType, currentTerm
+        sendMessage(response)
+
 def redirect(msg):
 	response = {'src': my_id, 'dst': msg['src'], 'leader': leader, 'type': 'redirect', 'MID': msg['MID']}
 	sendMessage(response)
@@ -259,7 +268,7 @@ while True:
 			leader = LEADER_UNKNOWN
 			votedFor = None
 		if msg['type'] == 'get':
-			handleGet(msg)
+			pendingGetRequests.append(msg)
 		elif msg['type'] == 'put':
 			handlePut(msg)
 		elif msg['type'] == REQUEST_VOTE:
@@ -280,6 +289,15 @@ while True:
 
 	if myNodeType == LEADER:
 		if time.time() - lastHeartbeat > .25:
+			if len(recentHeartbeatOks) + 1 >= majority:
+				for r in pendingGetRequests:
+					handleGet(r)
+			else:
+				#fail the get requests
+				for r in pendingGetRequests:
+                                        rejectGet(r)
+			pendingGetRequests = []
+			recentHeartbeatOks = []
 			if len(log) > 0:
 				notifyFollowersOfPut()
 			else:
